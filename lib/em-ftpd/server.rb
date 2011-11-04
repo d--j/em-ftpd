@@ -19,6 +19,8 @@ module EM::FTPD
 
     def initialize(driver)
       @driver = driver
+      @datasocket = nil
+      @listen_sig = nil
       super()
     end
 

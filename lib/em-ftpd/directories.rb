@@ -69,8 +69,6 @@ module EM::FTPD
 
       param = '' if param.to_s == '-a'
 
-      dir = File.join(@name_prefix.to_s, param.to_s)
-
       now = Time.now
 
       items = list_dir(build_path(param))
