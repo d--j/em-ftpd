@@ -25,6 +25,7 @@ module EM::FTPD
     def post_init
       @mode   = :binary
       @name_prefix = "/"
+      @driver = @driver.dup
 
       send_response "220 FTP server (em-ftpd) ready"
     end
