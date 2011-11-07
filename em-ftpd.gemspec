@@ -1,6 +1,6 @@
 Gem::Specification.new do |spec|
   spec.name = "em-ftpd"
-  spec.version = "0.0.1"
+  spec.version = "0.0.2"
   spec.summary = "An FTP daemon framework"
   spec.description = "Build a custom FTP daemon backed by a datastore of your choice"
   spec.files =  Dir.glob("{examples,lib}/**/**/*") + ["Gemfile", "README.markdown","MIT-LICENSE"]
@@ -21,5 +21,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency("guard-bundler")
   spec.add_development_dependency("guard-rspec")
 
-  spec.add_dependency('em-synchrony')
+  spec.add_dependency('eventmachine')
 end
