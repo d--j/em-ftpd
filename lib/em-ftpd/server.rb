@@ -17,8 +17,12 @@ module EM::FTPD
     attr_reader :root, :name_prefix
     attr_accessor :datasocket
 
-    def initialize(driver)
-      @driver = driver
+    def initialize(driver, *args)
+      if driver.is_a? Class
+        @driver = driver.new *args
+      else
+        @driver = driver
+      end
       @datasocket = nil
       @listen_sig = nil
       super()
@@ -27,7 +31,6 @@ module EM::FTPD
     def post_init
       @mode   = :binary
       @name_prefix = "/"
-      @driver = @driver.dup
 
       send_response "220 FTP server (em-ftpd) ready"
     end
