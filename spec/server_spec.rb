@@ -841,3 +841,69 @@ describe EM::FTPD::Server, "TYPE" do
   end
 
 end
+
+describe EM::FTPD::Server, "strip_telnet_strings" do
+  before(:each) do
+    @c = EM::FTPD::Server.new(nil, TestDriver.new)
+  end
+
+  it "should leave string untouched if there is no telnet escape chars in it" do
+    @c.send(:strip_telnet_strings, "RETR abcdef\015\012".force_encoding('binary')).should eq("RETR abcdef\015\012".force_encoding('binary'))
+  end
+
+  it "should parse telnet strings without response requests" do
+    @c.send(:strip_telnet_strings, "\377\366RE\377\374TTR abc\377\377def\015\377\376\012\012".force_encoding('binary')).should eq("RETR abc\377def\015\012".force_encoding('binary'))
+  end
+
+  it "should parse telnet strings with response requests" do
+    @c.reset_sent!
+    @c.send(:strip_telnet_strings, "RE\377\375TTR abc\377\377def\015\377\373\012\012".force_encoding('binary')).should eq("RETR abc\377def\015\012".force_encoding('binary'))
+    @c.sent_data.should eq("\377\374T\377\376\012".force_encoding('binary'))
+  end
+end
+
+describe EM::FTPD::Server, "parse_request" do
+  before(:each) do
+    @c = EM::FTPD::Server.new(nil, TestDriver.new)
+    @parse = proc { |string|
+      @c.send(:parse_request, string.force_encoding('binary'))
+    }
+  end
+
+  it "should parse empty line" do
+    @parse.call('').should eq(['', nil])
+  end
+
+  it "should parse command without parameter" do
+    @parse.call("NOOP\015\012").should eq(['noop', nil])
+  end
+
+  it "should parse command without parameter and bogus endline" do
+    @parse.call("NOOP\012").should eq(['noop', nil])
+  end
+
+  it "should parse command without parameter and no endline" do
+    @parse.call("NOOP").should eq(['noop', nil])
+  end
+
+  it "should parse command with parameter" do
+    @parse.call("RETR file.txt\015\012").should eq(['retr', 'file.txt'])
+  end
+
+  it "should parse command with parameter (leading space)" do
+    @parse.call("RETR  file.txt\015\012").should eq(['retr', ' file.txt'])
+  end
+
+  it "should parse command with parameter (trailing space)" do
+    @parse.call("RETR file.txt \015\012").should eq(['retr', 'file.txt '])
+  end
+
+  it "should parse command with parameter (leading and trailing space)" do
+    @parse.call("RETR  file.txt \015\012").should eq(['retr', ' file.txt '])
+  end
+
+  it "should parse command with null-byte in parameter" do
+    @parse.call("RETR file\000.txt\015\012").should eq(['retr', "file\012.txt"])
+  end
+
+end

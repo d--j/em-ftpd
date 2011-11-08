@@ -1,14 +1,11 @@
 require 'socket'
 require 'stringio'
 
-require 'em/protocols/line_protocol'
-
 module EM::FTPD
   class Server < EM::Connection
 
     LBRK = "\r\n"
 
-    include EM::Protocols::LineProtocol
     include Authentication
     include Directories
     include Files
@@ -33,6 +30,14 @@ module EM::FTPD
       @driver = @driver.dup
 
       send_response "220 FTP server (em-ftpd) ready"
+    end
+
+    def receive_data data
+      (@buf ||= '') << data
+
+      while line = @buf.slice!(/(.*)\r?\n/)
+        receive_line(strip_telnet_strings(line))
+      end
     end
 
     def receive_line(str)
@@ -68,11 +73,11 @@ module EM::FTPD
 
     # split a client's request into command and parameter components
     def parse_request(data)
-      data.strip!
+      data.chomp!
       space = data.index(" ")
       if space
         cmd = data[0, space]
-        param = data[space+1, data.length - space]
+        param = decode_param data[space+1, data.length - space]
         param = nil if param.strip.size == 0
       else
         cmd = data
@@ -80,6 +85,54 @@ module EM::FTPD
       end
 
       [cmd.downcase, param]
+    end
+
+    # decodes the param
+    # http://cr.yp.to/ftp/filesystem.html#pathname
+    def decode_param param
+      param.gsub!(/\0/,"\n") # null byte gets converted to new line
+      param.force_encoding('UTF-8') rescue param # try to convert param to UTF-8, use as is if not possible
+    end
+
+    # get rid of telnet nonsence (ASCII 255 + something has to be specially processed)
+    # http://cr.yp.to/ftp/request.html#telnet
+    def strip_telnet_strings line
+      state = :no_escape
+      line.bytes.inject("".force_encoding('binary')){ |memo, byte| 
+        old_state = state
+        case state
+        when :no_escape
+          if byte == 255
+            state = :escape
+          else
+            memo << byte.chr
+          end
+        when :escape
+          case byte
+          when 255
+            memo << byte.chr
+            state = :no_escape
+          when 254
+          when 252
+            state = :ignore_next
+          when 251
+            state = :send_254
+          when 253
+            state = :send_252
+          else
+            state = :no_escape
+          end
+        when :ignore_next
+          state = :no_escape
+        when :send_254
+          send_data "\377\376#{byte.chr}"
+          state = :no_escape
+        when :send_252
+          send_data "\377\374#{byte.chr}"
+          state = :no_escape
+        end
+        memo
+      }
     end
 
 
@@ -318,6 +371,7 @@ module EM::FTPD
     # all responses from an FTP server end with \r\n, so wrap the
     # send_data callback
     def send_response(msg, no_linebreak = false)
+      msg.gsub!("\377", "\377\377") if msg.encoding != Encoding::UTF_8 # \xFF has to be replaced by \xFF\xFF, \xFF is no valid codepoint in UTF-8 anyways 
       msg += LBRK unless no_linebreak
       send_data msg
     end
