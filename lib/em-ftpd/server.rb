@@ -16,7 +16,7 @@ module EM::FTPD
 
     COMMANDS = %w[quit type user retr stor eprt port cdup cwd dele rmd pwd
                   list size syst mkd pass xcup xpwd xcwd xrmd rest allo nlst
-                  pasv epsv help noop mode rnfr rnto stru feat]
+                  pasv epsv help noop mode rnfr rnto stru feat abor]
 
     attr_reader :root, :name_prefix
     attr_accessor :datasocket
@@ -90,6 +90,7 @@ module EM::FTPD
 
     def close_datasocket
       if @datasocket
+        @datasocket.abort unless @datasocket.finished
         @datasocket.close_connection_after_writing
         @datasocket = nil
       end
@@ -269,6 +270,17 @@ module EM::FTPD
       end
     end
 
+    # Abort any transfer on the data socket.
+    #
+    def cmd_abor(param)
+      if @datasocket && !@datasocket.finished
+        close_datasocket
+        send_response "426 service request aborted abnormally#{LBRK}226 abort successfully completed"
+      else
+        send_response "226 abort was not necessary"
+      end
+    end
+
     # send data to the client across the data socket.
     #
     # The data socket is NOT guaranteed to be setup by the time this method runs.
@@ -302,13 +314,17 @@ module EM::FTPD
               data.close if data.respond_to?(:close) && !data.closed?
             }
             streamer.callback {
-              send_response "226 Closing data connection, sent #{streamer.bytes_streamed} bytes"
+              unless datasocket.aborted
+                send_response "226 Closing data connection, sent #{streamer.bytes_streamed} bytes"
+              end
               finalize.call
             }
             streamer.errback { |ex|
-              send_response "425 Error while streaming data, sent #{streamer.bytes_streamed} bytes"
+              unless datasocket.aborted
+                send_response "425 Error while streaming data, sent #{streamer.bytes_streamed} bytes"
+              end
               finalize.call
-              raise ex
+              raise ex if ex
             }
           else
             # blocks until all data is sent

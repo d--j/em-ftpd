@@ -847,3 +847,34 @@ describe EM::FTPD::Server, "TYPE" do
   end
 
 end
+
+describe EM::FTPD::Server, "ABOR" do
+  before(:each) do
+    @c = EM::FTPD::Server.new(nil, TestDriver.new)
+  end
+
+  it "should respond with 226 when called without data socket" do
+    @c.reset_sent!
+    @c.receive_line("ABOR")
+    @c.sent_data.should match(/^226\s[a-z0-9 ]+\r\n$/i)
+  end
+
+  it "should respond with 226 when called with closed data socket" do
+    datasocket = OpenStruct.new()
+    datasocket.should_receive(:finished).with().and_return(true)
+    @c.send :instance_variable_set, :@datasocket, datasocket
+    @c.reset_sent!
+    @c.receive_line("ABOR")
+    @c.sent_data.should match(/^226\s[a-z0-9 ]+\r\n$/i)
+  end
+
+  it "should respond with 426 and 226 when called with open data socket" do
+    datasocket = OpenStruct.new()
+    datasocket.should_receive(:finished).with().and_return(false)
+    @c.send :instance_variable_set, :@datasocket, datasocket
+    @c.should_receive(:close_datasocket)
+    @c.reset_sent!
+    @c.receive_line("ABOR")
+    @c.sent_data.should match(/^426\s[a-z0-9 ]+\r\n226\s[a-z0-9 ]+\r\n$/i)
+  end
+end

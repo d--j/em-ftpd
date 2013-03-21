@@ -1,16 +1,17 @@
 module BaseSocket
 
-  attr_reader :aborted
+  attr_reader :aborted, :finished
 
   def initialize
     @on_stream = nil
-    @aborted = false
+    @aborted   = false
+    @finished  = false
   end
 
   def on_stream &blk
     @on_stream = blk if block_given?
     unless data.empty?
-      @on_stream.call(data) # send all data that was collected before the stream hanlder was set
+      @on_stream.call(data) # send all data that was collected before the stream handler was set
       @data = ""
     end
     @on_stream
@@ -29,14 +30,11 @@ module BaseSocket
   end
 
   def unbind
-    if @aborted
-      fail
+    @finished = true
+    if @on_stream
+      succeed
     else
-      if @on_stream
-        succeed
-      else
-        succeed data
-      end
+      succeed data
     end
   end
 

@@ -41,7 +41,7 @@ module EM::FTPD
 
     def stream_one_chunk
       loop {
-        if !@io.eof
+        if !@connection.aborted && !@io.eof
           if @connection.get_outbound_data_size > BackpressureLevel
             EventMachine::next_tick {stream_one_chunk}
             break
@@ -51,11 +51,17 @@ module EM::FTPD
             rescue EOFError
               next
             end
-            @connection.send_data(chunk_data)
-            @bytes_streamed += chunk_data.bytesize
+            if !@connection.aborted
+              @connection.send_data(chunk_data)
+              @bytes_streamed += chunk_data.bytesize
+            end
           end
         else
-          succeed
+          if @connection.aborted
+            fail nil
+          else
+            succeed
+          end
           break
         end
       }

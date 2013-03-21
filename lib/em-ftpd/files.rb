@@ -104,10 +104,12 @@ module EM::FTPD
         if datasocket
           send_response "150 Data transfer starting"
           @driver.put_file_streamed(target_path, datasocket) do |bytes|
-            if bytes
-              send_response "226 OK, received #{bytes} bytes"
-            else
-              send_action_not_taken
+            unless datasocket.aborted
+              if bytes
+                send_response "226 OK, received #{bytes} bytes"
+              else
+                send_action_not_taken
+              end
             end
           end
         else
@@ -126,13 +128,14 @@ module EM::FTPD
         }
         send_response "150 Data transfer starting"
         datasocket.callback {
-          puts "data transfer finished"
-          tmpfile.flush
-          @driver.put_file(target_path, tmpfile.path) do |bytes|
-            if bytes
-              send_response "226 OK, received #{bytes} bytes"
-            else
-              send_action_not_taken
+          unless datasocket.aborted
+            tmpfile.flush
+            @driver.put_file(target_path, tmpfile.path) do |bytes|
+              if bytes
+                send_response "226 OK, received #{bytes} bytes"
+              else
+                send_action_not_taken
+              end
             end
           end
           tmpfile.unlink
